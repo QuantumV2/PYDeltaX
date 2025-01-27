@@ -23,26 +23,26 @@ DeltaX (ΔX) v1 - Format Specification
 
     HEADER (8 bytes)
         Magic bytes "DX" (2 bytes)
-        Version number (variable length/2 bytes)
+        Version number (variable length)
         Flags:
             [Bit 1 - Bit 32] - reserved for future use
 
         PATTERN TABLE 
-            Pattern count (variable length/4 bytes)
+            Pattern count (variable length)
             For each pattern:
                 Pattern length (2 bytes)
                 Pattern data (variable length)
         FILE TABLE
-            File count (variable length/4 bytes)
+            File count (variable length)
             For each file:
                 Path length (2 bytes)
                 Path string (UTF-8)
-                Original file size (variable length/8 bytes)
-                Chunk count (variable length/4 bytes)
+                Original file size (variable length)
+                Chunk count (variable length)
                 For each chunk:
                     Chunk type (1 byte):
                     Pattern reference (0x0)
-                    Pattern index (variable length/4 bytes)
+                    Pattern index (variable length)
                     Raw data (0x1)
                     Length (2 bytes)
                     Raw bytes (variable length)
