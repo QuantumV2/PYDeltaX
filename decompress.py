@@ -27,6 +27,7 @@ for file in archive[2].files:
         else:
             file_data[file.path][0] += patterns[chunk.data]
 
+#print([p.__dict__ for p in archive[1].patterns])
 for file, filedata in file_data.items():
     file = f"{destination}{os.sep}{file}"
     filepath = Path(file)

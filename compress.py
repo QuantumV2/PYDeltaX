@@ -1,15 +1,13 @@
-#import random
 import sys
 import pathlib
 from format import *
-#import binascii
 import utils
 import re
 import os
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 archivedata = [DeltaXHeader()]
-
 
 sepsymbol = ""
 target = pathlib.Path(sys.argv[1])
@@ -32,66 +30,80 @@ for item in target.rglob("*"):
     elif item.is_dir() and not any(item.iterdir()):
         relative_path = str(item.relative_to(target))
         directories.append(relative_path)
-        
+
 use_chunks = True if chunksize != None else False
 
-# first pass: count all chunks or spaces
-for file in files:
+def process_file(file):
+    local_chunk_counts = {}
+    local_chunk_data = {}
     with open(f"{sys.argv[1]}{os.sep}{file}", "rb") as f:
+        print(f"Counting {file}")
         if use_chunks:
             while True:
                 chunk = f.read(chunksize)
                 if not chunk:
                     break
                 chunk_hash = hashlib.sha1(chunk).hexdigest()
-                chunk_counts[chunk_hash] = chunk_counts.get(chunk_hash, 0) + 1
-                chunk_data[chunk_hash] = chunk
+                local_chunk_counts[chunk_hash] = local_chunk_counts.get(chunk_hash, 0) + 1
+                local_chunk_data[chunk_hash] = chunk
         else:
             data = f.read()
-            spaces =  re.split(rb'[\s'+ sepsymbol + rb']+', data)
+            spaces = re.split(rb'[\s' + sepsymbol + rb']+', data)
             for space in spaces:
                 if space:  # ignore empty spaces
                     space = space + sepsymbol
                     space_hash = hashlib.sha1(space).hexdigest()
-                    chunk_counts[space_hash] = chunk_counts.get(space_hash, 0) + 1
-                    chunk_data[space_hash] = space
+                    local_chunk_counts[space_hash] = local_chunk_counts.get(space_hash, 0) + 1
+                    local_chunk_data[space_hash] = space
+    return local_chunk_counts, local_chunk_data
 
+# first pass: count all chunks or spaces
+with ThreadPoolExecutor() as executor:
+    futures = [executor.submit(process_file, file) for file in files]
+    for future in as_completed(futures):
+        local_chunk_counts, local_chunk_data = future.result()
+        for chunk_hash, count in local_chunk_counts.items():
+            chunk_counts[chunk_hash] = chunk_counts.get(chunk_hash, 0) + count
+        for chunk_hash, chunk in local_chunk_data.items():
+            chunk_data[chunk_hash] = chunk
 
 # murder chunks that only appear once
 chunks = {h: chunk_data[h] for h, count in chunk_counts.items() if count > 1}
 
-# second pass for building file data
-filedata = {}  # filename -> [ [DeltaXChunk, ...], size]
-for file in files:
+def build_file_data(file):
     with open(f"{sys.argv[1]}{os.sep}{file}", "rb") as f:
-        filedata[file] = [[], int(pathlib.Path(f"{sys.argv[1]}{os.sep}{file}").stat().st_size)]
-        ref_chunks = {} # (0,5): "hello"
+        print(f"Building {file}")
+        file_data = [[], int(pathlib.Path(f"{sys.argv[1]}{os.sep}{file}").stat().st_size)]
+        ref_chunks = {}  # (0,5): "hello"
         filebytes = f.read()
         for chunk_hash, chunk in list(chunks.items()):
-            occurences = utils.find_all(filebytes, chunk)
-
-            if occurences != []:
-                for occurence in occurences:
-                    #print(f"CHUNK {chunk} DETECTED AS A REFERENCE")
-                    ref_chunks[(occurence, len(chunk))] = chunk
+            occurrences = utils.find_all(filebytes, chunk)
+            if occurrences:
+                for occurrence in occurrences:
+                    ref_chunks[(occurrence, len(chunk))] = chunk
         current_pos = 0
         for (start, length), chunk in list(ref_chunks.items()):
             if current_pos < start:
                 rawdat = filebytes[current_pos:start]
-                filedata[file][0].append(DeltaXChunk(True, rawdat))
+                file_data[0].append(DeltaXChunk(True, rawdat))
                 current_pos = start
             if current_pos == start:
-                filedata[file][0].append(DeltaXChunk(False, list(chunks.values()).index(chunk)))
+                file_data[0].append(DeltaXChunk(False, list(chunks.values()).index(chunk)))
                 current_pos += length
-                
         if current_pos < len(filebytes):
             remaining = filebytes[current_pos:]
-            filedata[file][0].append(DeltaXChunk(True, remaining))
+            file_data[0].append(DeltaXChunk(True, remaining))
             current_pos = len(filebytes)
+    return file, file_data
 
-    #print(chunk_data)
-    #for chunk in filedata['format.py'][0]:
-        #print(chunk.__dict__)
+# second pass for building file data
+filedata = {}  # filename -> [ [DeltaXChunk, ...], size]
+with ThreadPoolExecutor() as executor:
+    futures = [executor.submit(build_file_data, file) for file in files]
+    for future in as_completed(futures):
+        file, file_data = future.result()
+        filedata[file] = file_data
+
 patterns = []
 for chunk in list(chunks.values()):
     patterns.append(DeltaXPattern(bytes(chunk)))
@@ -101,17 +113,13 @@ archivedata.append(pattable)
 
 dxfiles = []
 for name, file in filedata.items():
-    dxfiles.append(DeltaXFileData(name, file[1], file[0] ))
+    dxfiles.append(DeltaXFileData(name, file[1], file[0]))
 filetable = DeltaXFileTable(dxfiles, directories)
 
 archivedata.append(filetable)
 
-
-
 archive = DeltaXArchive(archivedata)
 packed = archive.pack()
-#print(binascii.hexlify(packed))
 
-#print(chunks)
 with open(f"output.dx", "wb") as f:
     f.write(packed)
