@@ -37,7 +37,7 @@ def process_file(file):
     local_chunk_counts = {}
     local_chunk_data = {}
     with open(f"{sys.argv[1]}{os.sep}{file}", "rb") as f:
-        print(f"Counting {file}")
+        print(f"Counting {file.encode('utf-8').decode('utf-8')}")
         if use_chunks:
             while True:
                 chunk = f.read(chunksize)
@@ -72,7 +72,7 @@ chunks = {h: chunk_data[h] for h, count in chunk_counts.items() if count > 1}
 
 def build_file_data(file):
     with open(f"{sys.argv[1]}{os.sep}{file}", "rb") as f:
-        print(f"Building {file}")
+        print(f"Building {file.encode('utf-8').decode('utf-8')}")
         file_data = [[], int(pathlib.Path(f"{sys.argv[1]}{os.sep}{file}").stat().st_size)]
         ref_chunks = {}  # (0,5): "hello"
         filebytes = f.read()
