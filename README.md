@@ -6,12 +6,12 @@ DeltaX is a compression format that uses patterns to compress multiple files eff
 Compress:
 
 
-    python3 compress.py "folder" "separator or a number interval"
+    python compress.py "folder" "separator or a number interval"
 
 Decompress:
 
 
-    python3 decompress.py "output.dx" "target folder"
+    python decompress.py "output.dx" "target folder"
 
 
 
