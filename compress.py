@@ -1,8 +1,8 @@
-import random
+#import random
 import sys
 import pathlib
 from format import *
-import binascii
+#import binascii
 import utils
 import re
 import os
@@ -110,8 +110,8 @@ archivedata.append(filetable)
 
 archive = DeltaXArchive(archivedata)
 packed = archive.pack()
-print(binascii.hexlify(packed))
+#print(binascii.hexlify(packed))
 
-print(chunks)
+#print(chunks)
 with open(f"output.dx", "wb") as f:
     f.write(packed)
